@@ -8,5 +8,6 @@ COPY Modelfile /app/Modelfile
 COPY handler.py /app/handler.py
 
 ENV OLLAMA_MODELS=/runpod-volume/models
+ENV OLLAMA_HOST=0.0.0.0
 
-CMD ["/bin/bash", "-c", "ollama serve & sleep 5 && if ! ollama list | grep -q 'kira'; then ollama pull nchapman/l3.3-70b-euryale-v2.3:70b && ollama create kira -f /app/Modelfile; fi && python3 /app/handler.py"]
+CMD ["/bin/bash", "-c", "ollama serve & sleep 3 && python3 /app/handler.py"]
