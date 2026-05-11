@@ -2,11 +2,12 @@ FROM nvidia/cuda:12.1.1-runtime-ubuntu22.04
 
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies (zstd required by ollama install.sh)
 RUN apt-get update && apt-get install -y \
     curl bash ca-certificates \
     python3 python3-pip \
     libstdc++6 libgomp1 \
+    zstd \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Ollama
