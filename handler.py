@@ -12,18 +12,15 @@ MODEL_NAME = "kira"
 BASE_MODEL = "nchapman/l3.3-70b-euryale-v2.3:70b"
 MODELFILE_PATH = "/app/Modelfile"
 VOLUME_MODELS = "/runpod-volume/models"
-model_ready = False
 
 print(f"[STARTUP] OLLAMA_MODELS={os.environ.get('OLLAMA_MODELS', 'NOT SET')}", flush=True)
 
 def setup_volume():
-    """Create model directory on volume at runtime (volume is mounted now)"""
     try:
         os.makedirs(VOLUME_MODELS, exist_ok=True)
-        print(f"[VOLUME] Created/confirmed: {VOLUME_MODELS}", flush=True)
+        print(f"[VOLUME] Created: {VOLUME_MODELS}", flush=True)
     except Exception as e:
-        print(f"[VOLUME] Warning - could not create {VOLUME_MODELS}: {e}", flush=True)
-        print("[VOLUME] Will use default Ollama path", flush=True)
+        print(f"[VOLUME] Warning: {e}", flush=True)
 
 def start_ollama():
     print("[OLLAMA] Starting ollama serve...", flush=True)
@@ -40,7 +37,7 @@ def wait_for_ollama(retries=120, delay=3):
             if r.status_code == 200:
                 print(f"[OLLAMA] Ready after {i*delay}s", flush=True)
                 return True
-        except Exception as e:
+        except Exception:
             if i % 10 == 0:
                 print(f"[OLLAMA] Not ready yet ({i*delay}s)", flush=True)
         time.sleep(delay)
@@ -51,49 +48,44 @@ def model_exists():
         r = requests.get(f"{OLLAMA_URL}/api/tags", timeout=5)
         tags = r.json().get("models", [])
         names = [m["name"] for m in tags]
-        exists = any(n.startswith(MODEL_NAME) for n in tags)
-        print(f"[MODEL] Available models: {names}", flush=True)
+        exists = any(n.startswith(MODEL_NAME) for n in names)
+        print(f"[MODEL] Available: {names}, kira exists: {exists}", flush=True)
         return exists
     except Exception as e:
         print(f"[MODEL] Check failed: {e}", flush=True)
         return False
 
-def ensure_model():
-    global model_ready
-    if model_ready:
-        return
-
+def init_model():
+    """Called at startup - before any requests come in"""
     setup_volume()
 
-    # Check ollama binary
     try:
         r = subprocess.run(["ollama", "--version"], capture_output=True, text=True, timeout=10)
         print(f"[OLLAMA] Version: {r.stdout.strip()}", flush=True)
     except Exception as e:
-        raise RuntimeError(f"ollama not found: {e}")
+        print(f"[OLLAMA] ERROR: binary missing: {e}", flush=True)
+        sys.exit(1)
 
     start_ollama()
 
     if not wait_for_ollama():
-        raise RuntimeError("Ollama not ready after timeout")
+        print("[OLLAMA] ERROR: timeout waiting for ollama", flush=True)
+        sys.exit(1)
 
     if not model_exists():
-        print(f"[MODEL] Pulling {BASE_MODEL}... (may take 10-20 min)", flush=True)
-        subprocess.run(["ollama", "pull", BASE_MODEL], check=True)
-        print(f"[MODEL] Creating kira from Modelfile...", flush=True)
-        subprocess.run(["ollama", "create", MODEL_NAME, "-f", MODELFILE_PATH], check=True)
+        print(f"[MODEL] Pulling {BASE_MODEL}...", flush=True)
+        result = subprocess.run(["ollama", "pull", BASE_MODEL], check=True)
+        print(f"[MODEL] Pull done: {result.returncode}", flush=True)
+        print("[MODEL] Creating kira...", flush=True)
+        result = subprocess.run(
+            ["ollama", "create", MODEL_NAME, "-f", MODELFILE_PATH], check=True
+        )
+        print(f"[MODEL] Create done: {result.returncode}", flush=True)
 
-    model_ready = True
-    print("[MODEL] Ready!", flush=True)
+    print("[MODEL] Model ready!", flush=True)
 
 def handler(job):
     print(f"[HANDLER] Job: {job.get('id', '?')}", flush=True)
-    try:
-        ensure_model()
-    except Exception as e:
-        print(f"[HANDLER] Setup failed: {e}", flush=True)
-        return {"error": str(e)}
-
     prompt = job["input"].get("prompt", "")
     try:
         r = requests.post(
@@ -101,9 +93,15 @@ def handler(job):
             json={"model": MODEL_NAME, "prompt": prompt, "stream": False},
             timeout=300
         )
-        return {"output": r.json().get("response", "")}
+        result = r.json().get("response", "")
+        print(f"[HANDLER] Response length: {len(result)}", flush=True)
+        return {"output": result}
     except Exception as e:
+        print(f"[HANDLER] Error: {e}", flush=True)
         return {"error": str(e)}
 
-print("[STARTUP] Registering handler...", flush=True)
+# Initialize model at startup (before accepting requests)
+print("[STARTUP] Initializing model...", flush=True)
+init_model()
+print("[STARTUP] Starting runpod handler...", flush=True)
 runpod.serverless.start({"handler": handler})
