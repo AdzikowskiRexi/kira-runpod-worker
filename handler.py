@@ -6,7 +6,7 @@ import os
 
 OLLAMA_URL = "http://localhost:11434"
 MODEL_NAME = "kira"
-BASE_MODEL = "nchapman/13.3-70b-euryale-v2.3:70b"
+BASE_MODEL = "nchapman/l3.3-70b-euryale-v2.3:70b"
 MODELFILE_PATH = "/app/Modelfile"
 model_ready = False
 
@@ -37,8 +37,7 @@ def model_exists():
 
 def ensure_model():
     global model_ready
-    if model_ready:
-        return
+    if model_ready: return
     start_ollama()
     if not wait_for_ollama():
         raise RuntimeError("Ollama not ready after 3 minutes")
