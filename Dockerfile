@@ -1,13 +1,15 @@
-FROM python:3.11-slim
+FROM nvidia/cuda:12.1.1-runtime-ubuntu22.04
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y curl bash ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y \
+    curl bash ca-certificates python3 python3-pip \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN curl -L https://github.com/ollama/ollama/releases/latest/download/ollama-linux-amd64 -o /usr/local/bin/ollama && \
     chmod +x /usr/local/bin/ollama
 
-RUN pip install runpod requests
+RUN pip3 install runpod requests
 
 COPY Modelfile /app/Modelfile
 COPY handler.py /app/handler.py
