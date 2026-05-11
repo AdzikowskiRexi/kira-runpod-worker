@@ -13,6 +13,9 @@ RUN apt-get update && apt-get install -y \
 # Install Ollama using official install script
 RUN curl -fsSL https://ollama.com/install.sh | sh
 
+# Ensure ollama binary is executable
+RUN chmod +x /usr/local/bin/ollama && ollama --version
+
 # Install Python dependencies
 RUN pip3 install runpod requests
 
@@ -23,8 +26,12 @@ COPY handler.py /app/handler.py
 # Create model directories
 RUN mkdir -p /root/.ollama /runpod-volume/models
 
+# Symlink .ollama to volume models path
+RUN ln -sf /runpod-volume/models /root/.ollama/models
+
 # Environment variables
 ENV OLLAMA_MODELS=/runpod-volume/models
 ENV OLLAMA_HOST=0.0.0.0
+ENV PYTHONUNBUFFERED=1
 
 CMD ["python3", "/app/handler.py"]
